@@ -1,0 +1,41 @@
+{
+    "name": "afterthoughts-cli",
+    "version": "1.0.0",
+    "description": "",
+    "type": "module",
+    "bin": {
+        "aft": "bin/index.js"
+    },
+    "exports": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "/bin",
+        "/dist"
+    ],
+    "scripts": {
+        "build": "rollup --config rollup.config.js"
+    },
+    "author": "wirelesseye",
+    "license": "MIT",
+    "dependencies": {
+        "@vitejs/plugin-react": "^2.2.0",
+        "afterthoughts": "file:../afterthoughts",
+        "deepmerge": "^4.2.2",
+        "jsdom": "^20.0.3",
+        "node-fetch": "^3.3.0",
+        "typescript": "^4.9.3",
+        "vite": "^3.2.5"
+    },
+    "devDependencies": {
+        "@rollup/plugin-commonjs": "^23.0.4",
+        "@rollup/plugin-node-resolve": "^15.0.1",
+        "@rollup/plugin-typescript": "^10.0.1",
+        "@types/jsdom": "^20.0.1",
+        "@types/node": "^18.11.11",
+        "@types/react-dom": "^18.0.9",
+        "rollup": "^3.7.1",
+        "rollup-plugin-node-externals": "^5.0.2",
+        "rollup-plugin-preserve-shebang": "^1.0.1",
+        "tslib": "^2.4.1"
+    }
+}
