@@ -19,7 +19,6 @@
     "license": "MIT",
     "dependencies": {
         "@vitejs/plugin-react": "^2.2.0",
-        "afterthoughts": "file:../afterthoughts",
         "deepmerge": "^4.2.2",
         "jsdom": "^20.0.3",
         "node-fetch": "^3.3.0",
@@ -37,5 +36,8 @@
         "rollup-plugin-node-externals": "^5.0.2",
         "rollup-plugin-preserve-shebang": "^1.0.1",
         "tslib": "^2.4.1"
+    },
+    "peerDependencies": {
+        "afterthoughts": "file:../afterthoughts"
     }
 }
