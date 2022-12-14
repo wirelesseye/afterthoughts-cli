@@ -4,11 +4,11 @@ import fs from "fs";
 import url from "url";
 import { JSDOM } from "jsdom";
 import fetch from "node-fetch";
-import { AftApp } from "afterthoughts";
 
 import { col, Color, Logger, Task, trim } from "./cli-utils";
 import generate from "./generate";
 
+import type { AftApp } from "afterthoughts";
 import type * as Fetch from "node-fetch";
 import type ReactNS from "react";
 import type ReactDOMServerNS from "react-dom/server";

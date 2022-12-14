@@ -4,10 +4,13 @@ import { setInterval } from 'node:timers';
 import * as vite from 'vite';
 import path from 'node:path';
 import url from 'node:url';
-import fs from 'node:fs';
+import fs$1 from 'node:fs';
 import { JSDOM } from 'jsdom';
 import fetch from 'node-fetch';
 import ts from 'typescript';
+import fs from 'fs-extra';
+import dayjs from 'dayjs';
+import parseMD from 'parse-md';
 
 class Task {
     static SPINNER_FRAMES = [
@@ -139,20 +142,19 @@ async function dev() {
 }
 
 const buildDirPath = path.resolve(process.cwd(), ".afterthoughts/build");
-const generateDirPath = path.resolve(process.cwd(), "public/assets/generate");
+const generateDirPath = path.resolve(process.cwd(), "public/generate");
+const dataDirPath = path.resolve(generateDirPath, "data");
 async function generate() {
-    await new Task("Generating config", async () => {
-        if (!fs.existsSync(buildDirPath)) {
-            fs.mkdirSync(buildDirPath, { recursive: true });
-        }
-        if (fs.existsSync(generateDirPath)) {
-            fs.rmSync(generateDirPath, { recursive: true, force: true });
-        }
-        fs.mkdirSync(generateDirPath, { recursive: true });
-        compileConfig();
-        const config = (await import(path.resolve(buildDirPath, "config.js"))).default;
-        fs.writeFileSync(path.resolve(generateDirPath, "config.json"), JSON.stringify(config));
-    }).start();
+    if (!fs.existsSync(buildDirPath)) {
+        fs.mkdirSync(buildDirPath, { recursive: true });
+    }
+    if (fs.existsSync(generateDirPath)) {
+        fs.rmSync(generateDirPath, { recursive: true, force: true });
+    }
+    fs.mkdirSync(generateDirPath, { recursive: true });
+    fs.mkdirSync(dataDirPath, { recursive: true });
+    const config = await new Task("Generating config", generateConfig).start();
+    await new Task("Generating posts", () => generatePosts(config)).start();
 }
 function compileConfig() {
     const configInput = fs.readFileSync(path.resolve(process.cwd(), "user/config.ts"), "utf8");
@@ -160,6 +162,56 @@ function compileConfig() {
         compilerOptions: { target: ts.ScriptTarget.ESNext },
     }).outputText;
     fs.writeFileSync(path.resolve(buildDirPath, "config.js"), configOutput, "utf8");
+}
+async function generateConfig() {
+    compileConfig();
+    const config = (await import(path.resolve(buildDirPath, "config.js"))).default;
+    fs.writeFileSync(path.resolve(generateDirPath, "config.json"), JSON.stringify(config));
+    return config;
+}
+async function generatePosts(config) {
+    const postsPath = path.resolve(process.cwd(), "user/posts");
+    fs.copySync(postsPath, path.resolve(generateDirPath, "posts"));
+    const posts = [];
+    const postsDir = fs.readdirSync(postsPath);
+    for (const postFilename of postsDir) {
+        const postFile = fs.readFileSync(path.join(postsPath, postFilename), "utf8");
+        const { metadata, content } = parseMD(postFile);
+        posts.push({
+            filename: postFilename,
+            metadata: metadata,
+            synopsis: content,
+        });
+    }
+    posts.sort((a, b) => dayjs(getMetaEntry(b, "date")).unix() -
+        dayjs(getMetaEntry(a, "date")).unix());
+    const numPerPage = config.posts.numPerPage;
+    const chunks = splitArray(posts, numPerPage);
+    const postsData = {
+        numPages: chunks.length,
+    };
+    fs.writeFileSync(path.resolve(dataDirPath, "posts.json"), JSON.stringify(postsData), "utf8");
+    fs.mkdirSync(path.resolve(dataDirPath, "posts"));
+    for (let i = 0; i < chunks.length; i++) {
+        fs.writeFileSync(path.resolve(dataDirPath, "posts", `${i}.json`), JSON.stringify(chunks[i]), "utf8");
+    }
+}
+function getMetaEntry(post, key, throwsErr) {
+    const result = post.metadata[key];
+    if (result !== undefined || !throwsErr) {
+        return result;
+    }
+    else {
+        throw `key ${key} does not exist in file ${post.filename}`;
+    }
+}
+function splitArray(arr, chunkSize) {
+    const chunks = [];
+    for (let i = 0; i < arr.length; i += chunkSize) {
+        const chunk = arr.slice(i, i + chunkSize);
+        chunks.push(chunk);
+    }
+    return chunks;
 }
 
 const React = (await import(path.resolve(process.cwd(), "node_modules/react/index.js"))).default;
@@ -183,7 +235,7 @@ async function build() {
     await new Task("Running pre-rendering jobs", prerender).start();
     await new Task("Building static pages", async () => {
         const app = (await import(path.resolve(process.cwd(), ".afterthoughts/build/app.js"))).default;
-        const template = fs.readFileSync(path.resolve(process.cwd(), "dist/index.html"), "utf8");
+        const template = fs$1.readFileSync(path.resolve(process.cwd(), "dist/index.html"), "utf8");
         const pages = app.pages;
         for (const pathname in pages) {
             await buildPage(app, template, pathname, pages[pathname]);
@@ -196,8 +248,8 @@ async function buildJSBundles() {
 }
 async function prerender() {
     const buildPath = path.resolve(process.cwd(), ".afterthoughts/build");
-    if (fs.existsSync(buildPath)) {
-        fs.rmSync(buildPath, { recursive: true, force: true });
+    if (fs$1.existsSync(buildPath)) {
+        fs$1.rmSync(buildPath, { recursive: true, force: true });
     }
     await vite.build(prerenderConfig);
 }
@@ -228,7 +280,7 @@ async function buildPage(app, template, pathname, factory) {
         }
         else {
             const filePath = path.join(process.cwd(), "public", inputUrl);
-            const file = fs.readFileSync(filePath);
+            const file = fs$1.readFileSync(filePath);
             response = new Response(file);
         }
         const result = await callback(response);
@@ -241,8 +293,8 @@ async function buildPage(app, template, pathname, factory) {
     }));
     const filePath = getFilePath(pathname);
     const dirPath = path.dirname(filePath);
-    if (!fs.existsSync(dirPath)) {
-        fs.mkdirSync(dirPath, { recursive: true });
+    if (!fs$1.existsSync(dirPath)) {
+        fs$1.mkdirSync(dirPath, { recursive: true });
     }
     const dom = new JSDOM(template);
     const document = dom.window.document;
@@ -260,9 +312,9 @@ async function buildPage(app, template, pathname, factory) {
         const firstScript = document.head.getElementsByTagName("script").item(0);
         document.head.insertBefore(newScript, firstScript);
     }
-    fs.writeFileSync(filePath, dom.serialize(), "utf8");
+    fs$1.writeFileSync(filePath, dom.serialize(), "utf8");
     const relPath = path.relative(path.resolve(process.cwd(), "dist"), filePath);
-    const stats = fs.statSync(filePath);
+    const stats = fs$1.statSync(filePath);
     const sizeInKiB = stats.size / 1024;
     logger.push(col("dist/", Color.Dim) +
         col(trim(relPath, 35), Color.FgCyan) +
