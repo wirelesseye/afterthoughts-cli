@@ -6,11 +6,11 @@ import path from 'node:path';
 import url from 'node:url';
 import fs$1 from 'node:fs';
 import { JSDOM } from 'jsdom';
-import fetch from 'node-fetch';
 import ts from 'typescript';
 import fs from 'fs-extra';
 import dayjs from 'dayjs';
 import parseMD from 'parse-md';
+import nodeFetch from 'node-fetch';
 
 class Task {
     static SPINNER_FRAMES = [
@@ -214,33 +214,111 @@ function splitArray(arr, chunkSize) {
     return chunks;
 }
 
+async function fetch(input, init) {
+    const inputUrl = input instanceof Request
+        ? input.url
+        : input instanceof URL
+            ? input.href
+            : input;
+    return isAbsoluteUrl(inputUrl)
+        ? (await nodeFetch(input, init))
+        : new Response(fs$1.readFileSync(path.join(process.cwd(), "public", inputUrl)));
+}
+globalThis.fetch = fetch;
+const reg = new RegExp("^(?:[a-z+]+:)?//", "i");
+function isAbsoluteUrl(url) {
+    return reg.test(url);
+}
+function getOutputFilePath(pathname) {
+    const outDirPath = path.resolve(process.cwd(), "dist");
+    let filePath = path.join(outDirPath, pathname);
+    const basename = path.parse(filePath).name;
+    if (basename === "index") {
+        filePath = path.resolve(path.dirname(filePath), basename + ".html");
+    }
+    else if (basename.startsWith("_")) {
+        filePath = path.resolve(path.dirname(filePath), basename.slice(1) + ".html");
+    }
+    else {
+        filePath = path.resolve(path.dirname(filePath), basename, "index.html");
+    }
+    return filePath;
+}
+function getNameParams(basename) {
+    const params = [];
+    let leftIndex = basename.indexOf("{");
+    while (leftIndex !== -1) {
+        const rightIndex = basename.indexOf("}", leftIndex);
+        if (rightIndex === -1) {
+            throw `invalid filename ${basename}: brackets do not match`;
+        }
+        params.push(basename.substring(leftIndex + 1, rightIndex));
+        leftIndex = basename.indexOf("{", rightIndex);
+    }
+    return params;
+}
+function fillPathParams(pathname, params) {
+    let result = pathname;
+    for (const param in params) {
+        result = result.replace(`{${param}}`, params[param]);
+    }
+    return result;
+}
+function splitParamValues(key, values) {
+    return values.map((value) => ({
+        [key]: String(value),
+    }));
+}
+function getParamCombs(params) {
+    const paramCombs = Object.keys(params).map((key) => {
+        const values = params[key];
+        if (Array.isArray(values)) {
+            const split = splitParamValues(key, values);
+            return split;
+        }
+        const thisParamCombs = splitParamValues(key, values.values);
+        const results = [];
+        for (const recordX of thisParamCombs) {
+            const childrenParams = values.children instanceof Function
+                ? values.children(recordX[key])
+                : values.children;
+            const childrenParamCombs = getParamCombs(childrenParams);
+            for (const recordY of childrenParamCombs) {
+                results.push({ ...recordX, ...recordY });
+            }
+        }
+        return results;
+    });
+    return paramCombs.reduce((x, y) => {
+        const results = [];
+        for (const recordX of x) {
+            for (const recordY of y) {
+                results.push({ ...recordX, ...recordY });
+            }
+        }
+        return results;
+    });
+}
+
 const React = (await import(path.resolve(process.cwd(), "node_modules/react/index.js"))).default;
 const ReactDOMServer = (await import(path.resolve(process.cwd(), "node_modules/react-dom/server.js"))).default;
 const dirname$1 = url.fileURLToPath(new URL(".", import.meta.url));
-const outDirPath = path.resolve(process.cwd(), "dist");
 const productionConfig = (await vite.loadConfigFromFile({
     command: "build",
     mode: "production",
 }, path.resolve(dirname$1, "../vite.config.ts"))).config;
 productionConfig.logLevel = "error";
-const logger = new Logger();
 const prerenderConfig = (await vite.loadConfigFromFile({
     command: "build",
     mode: "prerender",
 }, path.resolve(dirname$1, "../vite.prerender.config.ts"))).config;
 prerenderConfig.logLevel = "error";
+const logger = new Logger();
 async function build() {
     await generate();
     await new Task("Building javascript bundles", buildJSBundles).start();
     await new Task("Running pre-rendering jobs", prerender).start();
-    await new Task("Building static pages", async () => {
-        const app = (await import(path.resolve(process.cwd(), ".afterthoughts/build/app.js"))).default;
-        const template = fs$1.readFileSync(path.resolve(process.cwd(), "dist/index.html"), "utf8");
-        const pages = app.pages;
-        for (const pathname in pages) {
-            await buildPage(app, template, pathname, pages[pathname]);
-        }
-    }).start();
+    await new Task("Building static pages", buildStaticPages).start();
     logger.print();
 }
 async function buildJSBundles() {
@@ -253,49 +331,133 @@ async function prerender() {
     }
     await vite.build(prerenderConfig);
 }
-const reg = new RegExp("^(?:[a-z+]+:)?//", "i");
-function isAbsolute(url) {
-    return reg.test(url);
+async function buildStaticPages() {
+    const app = (await import(path.resolve(process.cwd(), ".afterthoughts/build/app.js"))).default;
+    const template = fs$1.readFileSync(path.resolve(process.cwd(), "dist/index.html"), "utf8");
+    const pages = app.pages;
+    for (const filepath in pages) {
+        await buildPage(app, template, filepath, pages);
+    }
 }
-async function buildPage(app, template, pathname, factory) {
-    const module = await factory();
+const outputPathnameMap = {};
+async function getOutputParentPathnames(pathname, pages) {
+    if (pathname in outputPathnameMap) {
+        return outputPathnameMap[pathname];
+    }
+    const parentPathname = path.dirname(pathname);
+    const outParentPathnames = parentPathname !== "/"
+        ? await getOutputParentPathnames(parentPathname, pages)
+        : ["/"];
+    const basename = path.basename(pathname);
+    const nameParams = getNameParams(basename);
+    const result = [];
+    if (nameParams.length > 0) {
+        let modulePath = path.join("/pages", pathname, "index.tsx");
+        if (pages[modulePath] === undefined) {
+            modulePath = path.join("/pages", pathname + ".tsx");
+            if (pages[modulePath] === undefined) {
+                throw `unable to find the page corresponding to the directory '${pathname}' containing parameters`;
+            }
+        }
+        const module = await pages[modulePath]();
+        const getPageParams = module.getPageParams;
+        if (getPageParams === undefined) {
+            throw `page '${modulePath}' has parameters but does not provide a 'getPageParams' function`;
+        }
+        for (const outParentPathname of outParentPathnames) {
+            const parent = path.basename(outParentPathname);
+            const pageParams = await getPageParams(parent);
+            const paramCombs = getParamCombs(pageParams);
+            if (paramCombs.length === 0) {
+                throw `unable to create the directory ${pathname} that satisfies all parameters`;
+            }
+            for (const key of nameParams) {
+                if (paramCombs[0][key] === undefined) {
+                    throw `the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`;
+                }
+            }
+            for (const comb of paramCombs) {
+                result.push(fillPathParams(path.join(outParentPathname, basename), comb));
+            }
+        }
+    }
+    else {
+        for (const outParentPathname of outParentPathnames) {
+            result.push(path.join(outParentPathname, basename));
+        }
+    }
+    outputPathnameMap[pathname] = result;
+    return result;
+}
+async function buildPage(app, template, filepath, pages) {
+    // import page module
+    const module = await pages[filepath]();
     const Page = module.default;
-    app.clearFetchRequests();
+    if (Page === undefined) {
+        return;
+    }
+    const pathname = path.resolve("/", path.relative("/pages", filepath));
+    const basename = path.basename(pathname);
+    const parentPathnames = await getOutputParentPathnames(path.dirname(pathname), pages);
+    const nameParams = getNameParams(basename);
+    if (nameParams.length > 0) {
+        const getPageParams = module.getPageParams;
+        if (getPageParams === undefined) {
+            throw `page '${pathname}' has parameters but does not provide a 'getPageParams' function`;
+        }
+        for (const parentPathname of parentPathnames) {
+            const parent = path.basename(parentPathname);
+            const pageParams = await getPageParams(parent);
+            const paramCombs = getParamCombs(pageParams);
+            if (paramCombs.length === 0) {
+                continue;
+            }
+            for (const key of nameParams) {
+                if (paramCombs[0][key] === undefined) {
+                    throw `the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`;
+                }
+            }
+            for (const comb of paramCombs) {
+                const subpageBasename = fillPathParams(basename, comb);
+                const subpagePathname = path.join(parentPathname, subpageBasename);
+                await buildSubpage(app, template, subpagePathname, Page);
+            }
+        }
+    }
+    else {
+        for (const parentPathname of parentPathnames) {
+            const subpagePathname = path.join(parentPathname, basename);
+            await buildSubpage(app, template, subpagePathname, Page);
+        }
+    }
+}
+async function buildSubpage(app, template, pathname, Page) {
+    // get output file path
+    const outputFilePath = getOutputFilePath(pathname);
+    if (!fs$1.existsSync(path.dirname(outputFilePath))) {
+        fs$1.mkdirSync(path.dirname(outputFilePath), { recursive: true });
+    }
+    // first rendering, to get preload fetches
+    app.resetPreloadDataMap();
     ReactDOMServer.renderToString(React.createElement(app, {
         renderPathname: pathname,
         renderPage: Page,
     }));
-    const fetchRequests = app.getFetchRequests();
+    const preloadFetches = app.getPreloadDataMap();
+    // fetch data
     const data = {};
-    for (const identifier in fetchRequests) {
-        const [input, init, callback] = fetchRequests[identifier];
-        const inputUrl = input instanceof Request
-            ? input.url
-            : input instanceof URL
-                ? input.href
-                : input;
-        let response;
-        if (isAbsolute(inputUrl)) {
-            response = (await fetch(input, init));
-        }
-        else {
-            const filePath = path.join(process.cwd(), "public", inputUrl);
-            const file = fs$1.readFileSync(filePath);
-            response = new Response(file);
-        }
-        const result = await callback(response);
-        data[identifier] = result;
+    for (const identifier in preloadFetches) {
+        const { input, init, callback } = preloadFetches[identifier];
+        const res = await fetch(input, init);
+        data[identifier] = await callback(res);
     }
+    // second rendering
     const renderResult = ReactDOMServer.renderToString(React.createElement(app, {
         renderPathname: pathname,
         renderPage: Page,
         renderData: data,
     }));
-    const filePath = getFilePath(pathname);
-    const dirPath = path.dirname(filePath);
-    if (!fs$1.existsSync(dirPath)) {
-        fs$1.mkdirSync(dirPath, { recursive: true });
-    }
+    // inject rendering results into the template
     const dom = new JSDOM(template);
     const document = dom.window.document;
     const root = document.getElementById("root");
@@ -303,37 +465,28 @@ async function buildPage(app, template, pathname, factory) {
         throw "cannot find root element";
     }
     root.innerHTML = renderResult;
+    // inject preload data
     if (Object.keys(data).length > 0) {
         const newScript = document.createElement("script");
         newScript.id = "preload-data";
         newScript.innerHTML =
             "window.__PRELOADED_DATA__=" +
                 JSON.stringify(data).replace(/</g, "\\u003c");
-        const firstScript = document.head.getElementsByTagName("script").item(0);
+        const firstScript = document.head
+            .getElementsByTagName("script")
+            .item(0);
         document.head.insertBefore(newScript, firstScript);
     }
-    fs$1.writeFileSync(filePath, dom.serialize(), "utf8");
-    const relPath = path.relative(path.resolve(process.cwd(), "dist"), filePath);
-    const stats = fs$1.statSync(filePath);
+    // write to html file
+    fs$1.writeFileSync(outputFilePath, dom.serialize(), "utf8");
+    // print message
+    const relPath = path.relative(path.resolve(process.cwd(), "dist"), outputFilePath);
+    const stats = fs$1.statSync(outputFilePath);
     const sizeInKiB = stats.size / 1024;
     logger.push(col("dist/", Color.Dim) +
         col(trim(relPath, 35), Color.FgCyan) +
         " ".repeat(5) +
         col(sizeInKiB.toFixed(2) + " KiB", Color.Dim));
-}
-function getFilePath(pathname) {
-    let filePath = path.resolve(outDirPath, path.relative("/pages", pathname));
-    const basename = path.parse(filePath).name;
-    if (basename === "index") {
-        filePath = path.resolve(path.dirname(filePath), basename + ".html");
-    }
-    else if (basename.startsWith("_")) {
-        filePath = path.resolve(path.dirname(filePath), basename.slice(1) + ".html");
-    }
-    else {
-        filePath = path.resolve(path.dirname(filePath), basename, "index.html");
-    }
-    return filePath;
 }
 
 const dirname = url.fileURLToPath(new URL(".", import.meta.url));
