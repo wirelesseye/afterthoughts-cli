@@ -312,12 +312,21 @@ async function getOutputDirPathnames(input, pages) {
     const nameParams = getNameParams(basename);
     const result = [];
     if (nameParams.length > 0) {
-        let modulePath = path.join("/pages", input, "index.tsx");
-        if (pages[modulePath] === undefined) {
-            modulePath = path.join("/pages", input + ".tsx");
-            if (pages[modulePath] === undefined) {
-                throw `unable to find the page corresponding to the directory '${input}' containing parameters`;
+        const pathCandidates = [
+            path.join("/pages", input, "index.tsx"),
+            path.join("/pages", input, "index.ts"),
+            path.join("/pages", input + ".tsx"),
+            path.join("/pages", input + ".ts"),
+        ];
+        let modulePath = null;
+        for (const candidate of pathCandidates) {
+            if (candidate in pages) {
+                modulePath = candidate;
+                break;
             }
+        }
+        if (modulePath === null) {
+            throw `unable to find the page corresponding to the directory '${input}' containing parameters`;
         }
         const module = await pages[modulePath]();
         const getPageParams = module.getPageParams;
