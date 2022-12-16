@@ -1,9 +1,10 @@
 import path from "path";
 import fs from "fs";
 import nodeFetch from "node-fetch";
+import { PageParams } from "afterthoughts";
 
 import type * as NodeFetch from "node-fetch";
-import { PageParams } from "afterthoughts";
+import type ReactNS from "react";
 
 export async function fetch(
     input: RequestInfo | URL,
@@ -122,4 +123,75 @@ export function getParamCombs(params: PageParams) {
         }
         return results;
     });
+}
+
+const outputPathnameMap: Record<string, string[]> = {};
+
+export async function getOutputDirPathnames(
+    input: string,
+    pages: Record<
+        string,
+        () => Promise<{
+            default: ReactNS.ComponentType<any>;
+        }>
+    >
+) {
+    if (input in outputPathnameMap) {
+        return outputPathnameMap[input];
+    }
+
+    const parentPathname = path.dirname(input);
+    const outParentPathnames =
+        parentPathname !== "/"
+            ? await getOutputDirPathnames(parentPathname, pages)
+            : ["/"];
+
+    const basename = path.basename(input);
+    const nameParams = getNameParams(basename);
+
+    const result: string[] = [];
+
+    if (nameParams.length > 0) {
+        let modulePath = path.join("/pages", input, "index.tsx");
+        if (pages[modulePath] === undefined) {
+            modulePath = path.join("/pages", input + ".tsx");
+            if (pages[modulePath] === undefined) {
+                throw `unable to find the page corresponding to the directory '${input}' containing parameters`;
+            }
+        }
+
+        const module: any = await pages[modulePath]();
+        const getPageParams = module.getPageParams;
+        if (getPageParams === undefined) {
+            throw `page '${modulePath}' has parameters but does not provide a 'getPageParams' function`;
+        }
+
+        for (const outParentPathname of outParentPathnames) {
+            const parent = path.basename(outParentPathname);
+            const pageParams = await getPageParams(parent);
+            const paramCombs = getParamCombs(pageParams);
+            if (paramCombs.length === 0) {
+                throw `unable to create the directory ${input} that satisfies all parameters`;
+            }
+
+            for (const key of nameParams) {
+                if (paramCombs[0][key] === undefined) {
+                    throw `the 'getPageParams' function of page '${input}' does not return the values of parameter '${key}'`;
+                }
+            }
+
+            for (const comb of paramCombs) {
+                result.push(
+                    fillPathParams(path.join(outParentPathname, basename), comb)
+                );
+            }
+        }
+    } else {
+        for (const outParentPathname of outParentPathnames) {
+            result.push(path.join(outParentPathname, basename));
+        }
+    }
+
+    outputPathnameMap[input] = result;
+    return result;
 }

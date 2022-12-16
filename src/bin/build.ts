@@ -16,6 +16,7 @@ import {
     getParamCombs,
     getNameParams,
     fillPathParams,
+    getOutputDirPathnames,
 } from "./build-utils";
 
 const React: typeof ReactNS = (
@@ -82,77 +83,6 @@ async function buildStaticPages() {
     }
 }
 
-const outputPathnameMap: Record<string, string[]> = {};
-
-async function getOutputParentPathnames(
-    pathname: string,
-    pages: Record<
-        string,
-        () => Promise<{
-            default: ReactNS.ComponentType<any>;
-        }>
-    >
-) {
-    if (pathname in outputPathnameMap) {
-        return outputPathnameMap[pathname];
-    }
-
-    const parentPathname = path.dirname(pathname);
-    const outParentPathnames =
-        parentPathname !== "/"
-            ? await getOutputParentPathnames(parentPathname, pages)
-            : ["/"];
-
-    const basename = path.basename(pathname);
-    const nameParams = getNameParams(basename);
-
-    const result: string[] = [];
-
-    if (nameParams.length > 0) {
-        let modulePath = path.join("/pages", pathname, "index.tsx");
-        if (pages[modulePath] === undefined) {
-            modulePath = path.join("/pages", pathname + ".tsx");
-            if (pages[modulePath] === undefined) {
-                throw `unable to find the page corresponding to the directory '${pathname}' containing parameters`;
-            }
-        }
-
-        const module: any = await pages[modulePath]();
-        const getPageParams = module.getPageParams;
-        if (getPageParams === undefined) {
-            throw `page '${modulePath}' has parameters but does not provide a 'getPageParams' function`;
-        }
-
-        for (const outParentPathname of outParentPathnames) {
-            const parent = path.basename(outParentPathname);
-            const pageParams = await getPageParams(parent);
-            const paramCombs = getParamCombs(pageParams);
-            if (paramCombs.length === 0) {
-                throw `unable to create the directory ${pathname} that satisfies all parameters`;
-            }
-
-            for (const key of nameParams) {
-                if (paramCombs[0][key] === undefined) {
-                    throw `the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`;
-                }
-            }
-
-            for (const comb of paramCombs) {
-                result.push(
-                    fillPathParams(path.join(outParentPathname, basename), comb)
-                );
-            }
-        }
-    } else {
-        for (const outParentPathname of outParentPathnames) {
-            result.push(path.join(outParentPathname, basename));
-        }
-    }
-
-    outputPathnameMap[pathname] = result;
-    return result;
-}
-
 async function buildPage(
     app: AftApp,
     template: string,
@@ -164,16 +94,16 @@ async function buildPage(
         }>
     >
 ) {
-    // import page module
+    // import module
     const module = await pages[filepath]();
     const Page = module.default;
     if (Page === undefined) {
         return;
     }
 
-    const pathname = path.resolve("/", path.relative("/pages", filepath));
+    const pathname = path.join("/", path.relative("/pages", filepath));
     const basename = path.basename(pathname);
-    const parentPathnames = await getOutputParentPathnames(
+    const parentPathnames = await getOutputDirPathnames(
         path.dirname(pathname),
         pages
     );
