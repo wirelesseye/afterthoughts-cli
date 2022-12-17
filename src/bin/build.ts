@@ -7,14 +7,13 @@ import { JSDOM } from "jsdom";
 import { col, Color, Logger, Task, trim } from "./cli-utils";
 import generate from "./generate";
 
-import type { AftApp, PageParams } from "afterthoughts";
+import { AftApp, getPathParams, PageParams, PageType } from "afterthoughts";
 import type ReactNS from "react";
 import type ReactDOMServerNS from "react-dom/server";
 import {
     getOutputFilePath,
     fetch,
     getParamCombs,
-    getNameParams,
     fillPathParams,
     getOutputDirPathnames,
 } from "./build-utils";
@@ -87,12 +86,7 @@ async function buildPage(
     app: AftApp,
     template: string,
     filepath: string,
-    pages: Record<
-        string,
-        () => Promise<{
-            default: ReactNS.ComponentType<any>;
-        }>
-    >
+    pages: Record<string, () => Promise<PageType>>
 ) {
     // import module
     const module = await pages[filepath]();
@@ -108,11 +102,10 @@ async function buildPage(
         pages
     );
 
-    const nameParams = getNameParams(basename);
-    if (nameParams.length > 0) {
-        const getPageParams: (parent: string) => Promise<PageParams> = (
-            module as any
-        ).getPageParams;
+    const pathParams = getPathParams(basename);
+    if (pathParams.length > 0) {
+        const getPageParams: (parent: string) => Promise<PageParams> =
+            module.getPageParams;
         if (getPageParams === undefined) {
             throw `page '${pathname}' has parameters but does not provide a 'getPageParams' function`;
         }
@@ -125,7 +118,7 @@ async function buildPage(
                 continue;
             }
 
-            for (const key of nameParams) {
+            for (const key of pathParams) {
                 if (paramCombs[0][key] === undefined) {
                     throw `the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`;
                 }
@@ -137,13 +130,13 @@ async function buildPage(
                     parentPathname,
                     subpageBasename
                 );
-                await buildSubpage(app, template, subpagePathname, Page);
+                await buildSubpage(app, template, subpagePathname, Page, comb);
             }
         }
     } else {
         for (const parentPathname of parentPathnames) {
             const subpagePathname = path.join(parentPathname, basename);
-            await buildSubpage(app, template, subpagePathname, Page);
+            await buildSubpage(app, template, subpagePathname, Page, {});
         }
     }
 }
@@ -152,7 +145,8 @@ async function buildSubpage(
     app: AftApp,
     template: string,
     pathname: string,
-    Page: React.ComponentType<any>
+    Page: React.ComponentType<any>,
+    params: Record<string, string>
 ) {
     // get output file path
     const outputFilePath = getOutputFilePath(pathname);
@@ -166,6 +160,7 @@ async function buildSubpage(
         React.createElement(app, {
             renderPathname: pathname,
             renderPage: Page,
+            renderParams: params,
         })
     );
     const preloadFetches = app.getPreloadDataMap();
@@ -183,6 +178,7 @@ async function buildSubpage(
         React.createElement(app, {
             renderPathname: pathname,
             renderPage: Page,
+            renderParams: params,
             renderData: data,
         })
     );

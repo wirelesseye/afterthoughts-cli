@@ -1,10 +1,9 @@
 import path from "path";
 import fs from "fs";
 import nodeFetch from "node-fetch";
-import { PageParams } from "afterthoughts";
+import { getPathParams, PageParams, PageType } from "afterthoughts";
 
 import type * as NodeFetch from "node-fetch";
-import type ReactNS from "react";
 
 export async function fetch(
     input: RequestInfo | URL,
@@ -50,21 +49,6 @@ export function getOutputFilePath(pathname: string) {
     }
 
     return filePath;
-}
-
-export function getNameParams(basename: string) {
-    const params: string[] = [];
-    let leftIndex = basename.indexOf("{");
-    while (leftIndex !== -1) {
-        const rightIndex = basename.indexOf("}", leftIndex);
-        if (rightIndex === -1) {
-            throw `invalid filename ${basename}: brackets do not match`;
-        }
-        params.push(basename.substring(leftIndex + 1, rightIndex));
-        leftIndex = basename.indexOf("{", rightIndex);
-    }
-
-    return params;
 }
 
 export function fillPathParams(
@@ -129,12 +113,7 @@ const outputPathnameMap: Record<string, string[]> = {};
 
 export async function getOutputDirPathnames(
     input: string,
-    pages: Record<
-        string,
-        () => Promise<{
-            default: ReactNS.ComponentType<any>;
-        }>
-    >
+    pages: Record<string, () => Promise<PageType>>
 ) {
     if (input in outputPathnameMap) {
         return outputPathnameMap[input];
@@ -147,11 +126,11 @@ export async function getOutputDirPathnames(
             : ["/"];
 
     const basename = path.basename(input);
-    const nameParams = getNameParams(basename);
+    const pathParams = getPathParams(basename);
 
     const result: string[] = [];
 
-    if (nameParams.length > 0) {
+    if (pathParams.length > 0) {
         const pathCandidates = [
             path.join("/pages", input, "index.tsx"),
             path.join("/pages", input, "index.ts"),
@@ -185,7 +164,7 @@ export async function getOutputDirPathnames(
                 throw `unable to create the directory ${input} that satisfies all parameters`;
             }
 
-            for (const key of nameParams) {
+            for (const key of pathParams) {
                 if (paramCombs[0][key] === undefined) {
                     throw `the 'getPageParams' function of page '${input}' does not return the values of parameter '${key}'`;
                 }

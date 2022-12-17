@@ -10,6 +10,7 @@ import ts from 'typescript';
 import fs from 'fs-extra';
 import dayjs from 'dayjs';
 import parseMD from 'parse-md';
+import { getPathParams } from 'afterthoughts';
 import nodeFetch from 'node-fetch';
 
 class Task {
@@ -244,19 +245,6 @@ function getOutputFilePath(pathname) {
     }
     return filePath;
 }
-function getNameParams(basename) {
-    const params = [];
-    let leftIndex = basename.indexOf("{");
-    while (leftIndex !== -1) {
-        const rightIndex = basename.indexOf("}", leftIndex);
-        if (rightIndex === -1) {
-            throw `invalid filename ${basename}: brackets do not match`;
-        }
-        params.push(basename.substring(leftIndex + 1, rightIndex));
-        leftIndex = basename.indexOf("{", rightIndex);
-    }
-    return params;
-}
 function fillPathParams(pathname, params) {
     let result = pathname;
     for (const param in params) {
@@ -309,9 +297,9 @@ async function getOutputDirPathnames(input, pages) {
         ? await getOutputDirPathnames(parentPathname, pages)
         : ["/"];
     const basename = path.basename(input);
-    const nameParams = getNameParams(basename);
+    const pathParams = getPathParams(basename);
     const result = [];
-    if (nameParams.length > 0) {
+    if (pathParams.length > 0) {
         const pathCandidates = [
             path.join("/pages", input, "index.tsx"),
             path.join("/pages", input, "index.ts"),
@@ -340,7 +328,7 @@ async function getOutputDirPathnames(input, pages) {
             if (paramCombs.length === 0) {
                 throw `unable to create the directory ${input} that satisfies all parameters`;
             }
-            for (const key of nameParams) {
+            for (const key of pathParams) {
                 if (paramCombs[0][key] === undefined) {
                     throw `the 'getPageParams' function of page '${input}' does not return the values of parameter '${key}'`;
                 }
@@ -408,8 +396,8 @@ async function buildPage(app, template, filepath, pages) {
     const pathname = path.join("/", path.relative("/pages", filepath));
     const basename = path.basename(pathname);
     const parentPathnames = await getOutputDirPathnames(path.dirname(pathname), pages);
-    const nameParams = getNameParams(basename);
-    if (nameParams.length > 0) {
+    const pathParams = getPathParams(basename);
+    if (pathParams.length > 0) {
         const getPageParams = module.getPageParams;
         if (getPageParams === undefined) {
             throw `page '${pathname}' has parameters but does not provide a 'getPageParams' function`;
@@ -421,7 +409,7 @@ async function buildPage(app, template, filepath, pages) {
             if (paramCombs.length === 0) {
                 continue;
             }
-            for (const key of nameParams) {
+            for (const key of pathParams) {
                 if (paramCombs[0][key] === undefined) {
                     throw `the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`;
                 }
@@ -429,18 +417,18 @@ async function buildPage(app, template, filepath, pages) {
             for (const comb of paramCombs) {
                 const subpageBasename = fillPathParams(basename, comb);
                 const subpagePathname = path.join(parentPathname, subpageBasename);
-                await buildSubpage(app, template, subpagePathname, Page);
+                await buildSubpage(app, template, subpagePathname, Page, comb);
             }
         }
     }
     else {
         for (const parentPathname of parentPathnames) {
             const subpagePathname = path.join(parentPathname, basename);
-            await buildSubpage(app, template, subpagePathname, Page);
+            await buildSubpage(app, template, subpagePathname, Page, {});
         }
     }
 }
-async function buildSubpage(app, template, pathname, Page) {
+async function buildSubpage(app, template, pathname, Page, params) {
     // get output file path
     const outputFilePath = getOutputFilePath(pathname);
     if (!fs$1.existsSync(path.dirname(outputFilePath))) {
@@ -451,6 +439,7 @@ async function buildSubpage(app, template, pathname, Page) {
     ReactDOMServer.renderToString(React.createElement(app, {
         renderPathname: pathname,
         renderPage: Page,
+        renderParams: params,
     }));
     const preloadFetches = app.getPreloadDataMap();
     // fetch data
@@ -464,6 +453,7 @@ async function buildSubpage(app, template, pathname, Page) {
     const renderResult = ReactDOMServer.renderToString(React.createElement(app, {
         renderPathname: pathname,
         renderPage: Page,
+        renderParams: params,
         renderData: data,
     }));
     // inject rendering results into the template
