@@ -18,6 +18,8 @@
     "author": "wirelesseye",
     "license": "MIT",
     "dependencies": {
+        "@emotion/babel-plugin": "^11.10.5",
+        "@emotion/react": "^11.10.5",
         "@vitejs/plugin-react": "^2.2.0",
         "dayjs": "^1.11.7",
         "deepmerge": "^4.2.2",

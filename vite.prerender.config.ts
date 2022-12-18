@@ -20,9 +20,8 @@ export default defineConfig({
                 "react",
                 "react-dom",
                 "react/jsx-runtime",
-                "process",
-                "fs",
-                "path",
+                "@emotion/react",
+                "@emotion/react/jsx-runtime",
             ],
         },
     },
@@ -31,5 +30,13 @@ export default defineConfig({
             "import.meta.url": "import.meta.url",
         },
     },
-    plugins: [tsconfigPaths(), react()],
+    plugins: [
+        tsconfigPaths(),
+        react({
+            jsxImportSource: "@emotion/react",
+            babel: {
+                plugins: ["@emotion/babel-plugin"],
+            },
+        }),
+    ],
 });
