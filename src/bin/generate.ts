@@ -27,7 +27,7 @@ export default async function generate() {
 }
 
 async function generateConfig() {
-    esbuild.build({
+    await esbuild.build({
         entryPoints: [path.resolve(process.cwd(), "user/config.ts")],
         bundle: false,
         format: "esm",
@@ -98,7 +98,7 @@ function getMetaEntry(post: PostInfo, key: string, throwsErr?: boolean) {
     if (result !== undefined || !throwsErr) {
         return result;
     } else {
-        throw `key ${key} does not exist in file ${post.filename}`;
+        throw Error(`key ${key} does not exist in file ${post.filename}`);
     }
 }
 

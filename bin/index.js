@@ -158,7 +158,7 @@ async function generate() {
     await new Task("Generating posts", () => generatePosts(config)).start();
 }
 async function generateConfig() {
-    esbuild.build({
+    await esbuild.build({
         entryPoints: [path.resolve(process.cwd(), "user/config.ts")],
         bundle: false,
         format: "esm",
@@ -201,7 +201,7 @@ function getMetaEntry(post, key, throwsErr) {
         return result;
     }
     else {
-        throw `key ${key} does not exist in file ${post.filename}`;
+        throw Error(`key ${key} does not exist in file ${post.filename}`);
     }
 }
 function splitArray(arr, chunkSize) {
@@ -312,23 +312,23 @@ async function getOutputDirPathnames(input, pages) {
             }
         }
         if (modulePath === null) {
-            throw `unable to find the page corresponding to the directory '${input}' containing parameters`;
+            throw Error(`unable to find the page corresponding to the directory '${input}' containing parameters`);
         }
         const module = await pages[modulePath]();
         const getPageParams = module.getPageParams;
         if (getPageParams === undefined) {
-            throw `page '${modulePath}' has parameters but does not provide a 'getPageParams' function`;
+            throw Error(`page '${modulePath}' has parameters but does not provide a 'getPageParams' function`);
         }
         for (const outParentPathname of outParentPathnames) {
             const parent = path.basename(outParentPathname);
             const pageParams = await getPageParams(parent);
             const paramCombs = getParamCombs(pageParams);
             if (paramCombs.length === 0) {
-                throw `unable to create the directory ${input} that satisfies all parameters`;
+                throw Error(`unable to create the directory ${input} that satisfies all parameters`);
             }
             for (const key of pathParams) {
                 if (paramCombs[0][key] === undefined) {
-                    throw `the 'getPageParams' function of page '${input}' does not return the values of parameter '${key}'`;
+                    throw Error(`the 'getPageParams' function of page '${input}' does not return the values of parameter '${key}'`);
                 }
             }
             for (const comb of paramCombs) {
@@ -398,7 +398,7 @@ async function buildPage(app, template, filepath, pages) {
     if (pathParams.length > 0) {
         const getPageParams = module.getPageParams;
         if (getPageParams === undefined) {
-            throw `page '${pathname}' has parameters but does not provide a 'getPageParams' function`;
+            throw Error(`page '${pathname}' has parameters but does not provide a 'getPageParams' function`);
         }
         for (const parentPathname of parentPathnames) {
             const parent = path.basename(parentPathname);
@@ -409,7 +409,7 @@ async function buildPage(app, template, filepath, pages) {
             }
             for (const key of pathParams) {
                 if (paramCombs[0][key] === undefined) {
-                    throw `the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`;
+                    throw Error(`the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`);
                 }
             }
             for (const comb of paramCombs) {
@@ -433,11 +433,13 @@ async function buildSubpage(app, template, pathname, Page, params) {
         fs$1.mkdirSync(path.dirname(outputFilePath), { recursive: true });
     }
     // first rendering, to get preload fetches
+    const headTags = [];
     app.resetPreloadDataMap();
     ReactDOMServer.renderToString(React.createElement(app, {
         renderPathname: pathname,
         renderPage: Page,
         renderParams: params,
+        renderHeadTags: headTags,
     }));
     const preloadFetches = app.getPreloadDataMap();
     // fetch data
@@ -452,16 +454,20 @@ async function buildSubpage(app, template, pathname, Page, params) {
         renderPathname: pathname,
         renderPage: Page,
         renderParams: params,
+        renderHeadTags: headTags,
         renderData: data,
     }));
+    // render head
+    const headContent = ReactDOMServer.renderToString(headTags);
     // inject rendering results into the template
     const dom = new JSDOM(template);
     const document = dom.window.document;
     const root = document.getElementById("root");
     if (!root) {
-        throw "cannot find root element";
+        throw Error("cannot find root element");
     }
     root.innerHTML = renderResult;
+    document.head.innerHTML += headContent;
     // inject preload data
     if (Object.keys(data).length > 0) {
         const newScript = document.createElement("script");

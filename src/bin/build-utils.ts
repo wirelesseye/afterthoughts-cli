@@ -147,13 +147,17 @@ export async function getOutputDirPathnames(
         }
 
         if (modulePath === null) {
-            throw `unable to find the page corresponding to the directory '${input}' containing parameters`;
+            throw Error(
+                `unable to find the page corresponding to the directory '${input}' containing parameters`
+            );
         }
 
         const module: any = await pages[modulePath]();
         const getPageParams = module.getPageParams;
         if (getPageParams === undefined) {
-            throw `page '${modulePath}' has parameters but does not provide a 'getPageParams' function`;
+            throw Error(
+                `page '${modulePath}' has parameters but does not provide a 'getPageParams' function`
+            );
         }
 
         for (const outParentPathname of outParentPathnames) {
@@ -161,12 +165,16 @@ export async function getOutputDirPathnames(
             const pageParams = await getPageParams(parent);
             const paramCombs = getParamCombs(pageParams);
             if (paramCombs.length === 0) {
-                throw `unable to create the directory ${input} that satisfies all parameters`;
+                throw Error(
+                    `unable to create the directory ${input} that satisfies all parameters`
+                );
             }
 
             for (const key of pathParams) {
                 if (paramCombs[0][key] === undefined) {
-                    throw `the 'getPageParams' function of page '${input}' does not return the values of parameter '${key}'`;
+                    throw Error(
+                        `the 'getPageParams' function of page '${input}' does not return the values of parameter '${key}'`
+                    );
                 }
             }
 

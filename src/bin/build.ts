@@ -107,7 +107,9 @@ async function buildPage(
         const getPageParams: (parent: string) => Promise<PageParams> =
             module.getPageParams;
         if (getPageParams === undefined) {
-            throw `page '${pathname}' has parameters but does not provide a 'getPageParams' function`;
+            throw Error(
+                `page '${pathname}' has parameters but does not provide a 'getPageParams' function`
+            );
         }
 
         for (const parentPathname of parentPathnames) {
@@ -120,7 +122,9 @@ async function buildPage(
 
             for (const key of pathParams) {
                 if (paramCombs[0][key] === undefined) {
-                    throw `the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`;
+                    throw Error(
+                        `the 'getPageParams' function of page '${pathname}' does not return the values of parameter '${key}'`
+                    );
                 }
             }
 
@@ -155,12 +159,15 @@ async function buildSubpage(
     }
 
     // first rendering, to get preload fetches
+    const headTags: React.ReactElement[] = [];
+
     app.resetPreloadDataMap();
     ReactDOMServer.renderToString(
         React.createElement(app, {
             renderPathname: pathname,
             renderPage: Page,
             renderParams: params,
+            renderHeadTags: headTags,
         })
     );
     const preloadFetches = app.getPreloadDataMap();
@@ -179,18 +186,23 @@ async function buildSubpage(
             renderPathname: pathname,
             renderPage: Page,
             renderParams: params,
+            renderHeadTags: headTags,
             renderData: data,
         })
     );
+
+    // render head
+    const headContent = ReactDOMServer.renderToString(headTags as any);
 
     // inject rendering results into the template
     const dom = new JSDOM(template);
     const document = dom.window.document;
     const root = document.getElementById("root");
     if (!root) {
-        throw "cannot find root element";
+        throw Error("cannot find root element");
     }
     root.innerHTML = renderResult;
+    document.head.innerHTML += headContent;
 
     // inject preload data
     if (Object.keys(data).length > 0) {
