@@ -134,7 +134,7 @@ const dirname$2 = url.fileURLToPath(new URL(".", import.meta.url));
 const viteConfig$1 = (await vite.loadConfigFromFile({
     command: "serve",
     mode: "development",
-}, path.resolve(dirname$2, "../vite.config.ts")))?.config;
+}, path.resolve(dirname$2, "../vite.config.js")))?.config;
 async function dev() {
     const server = await new Task("Starting development server", () => vite.createServer(viteConfig$1).then((server) => server.listen())).start();
     printLn();
@@ -353,12 +353,12 @@ const dirname$1 = url.fileURLToPath(new URL(".", import.meta.url));
 const productionConfig = (await vite.loadConfigFromFile({
     command: "build",
     mode: "production",
-}, path.resolve(dirname$1, "../vite.config.ts"))).config;
+}, path.resolve(dirname$1, "../vite.config.js"))).config;
 productionConfig.logLevel = "error";
 const prerenderConfig = (await vite.loadConfigFromFile({
     command: "build",
     mode: "prerender",
-}, path.resolve(dirname$1, "../vite.prerender.config.ts"))).config;
+}, path.resolve(dirname$1, "../vite.prerender.config.js"))).config;
 prerenderConfig.logLevel = "error";
 const logger = new Logger();
 async function build() {
@@ -492,7 +492,7 @@ const dirname = url.fileURLToPath(new URL(".", import.meta.url));
 const viteConfig = (await vite.loadConfigFromFile({
     command: "serve",
     mode: "production",
-}, path.resolve(dirname, "../vite.config.ts")))?.config;
+}, path.resolve(dirname, "../vite.config.js")))?.config;
 async function preview() {
     const server = await new Task("Starting preview server", () => vite.preview(viteConfig)).start();
     printLn();

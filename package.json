@@ -10,7 +10,8 @@
     "types": "./dist/index.d.ts",
     "files": [
         "/bin",
-        "/dist"
+        "/dist",
+        "./vite*.js"
     ],
     "scripts": {
         "build": "rollup --config rollup.config.js"

@@ -10,7 +10,7 @@ const viteConfig = (
             command: "serve",
             mode: "development",
         },
-        path.resolve(dirname, "../vite.config.ts")
+        path.resolve(dirname, "../vite.config.js")
     )
 )?.config;
 

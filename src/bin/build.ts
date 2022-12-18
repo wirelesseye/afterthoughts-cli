@@ -33,7 +33,7 @@ const productionConfig = (await vite.loadConfigFromFile(
         command: "build",
         mode: "production",
     },
-    path.resolve(dirname, "../vite.config.ts")
+    path.resolve(dirname, "../vite.config.js")
 ))!.config;
 productionConfig.logLevel = "error";
 const prerenderConfig = (await vite.loadConfigFromFile(
@@ -41,7 +41,7 @@ const prerenderConfig = (await vite.loadConfigFromFile(
         command: "build",
         mode: "prerender",
     },
-    path.resolve(dirname, "../vite.prerender.config.ts")
+    path.resolve(dirname, "../vite.prerender.config.js")
 ))!.config;
 prerenderConfig.logLevel = "error";
 
