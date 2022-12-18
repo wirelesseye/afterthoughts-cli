@@ -45,6 +45,6 @@
         "tslib": "^2.4.1"
     },
     "peerDependencies": {
-        "afterthoughts": "file:../afterthoughts"
+        "afterthoughts": "github:wirelesseye/afterthoughts"
     }
 }
