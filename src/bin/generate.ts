@@ -1,9 +1,9 @@
-import ts from "typescript";
 import fs from "fs-extra";
 import path from "path";
 import dayjs from "dayjs";
 import { Task } from "./cli-utils";
 import parseMD from "parse-md";
+import esbuild from "esbuild";
 
 import type { AftConfig, PostInfo } from "afterthoughts";
 
@@ -26,24 +26,14 @@ export default async function generate() {
     await new Task("Generating posts", () => generatePosts(config)).start();
 }
 
-function compileConfig() {
-    const configInput = fs.readFileSync(
-        path.resolve(process.cwd(), "user/config.ts"),
-        "utf8"
-    );
-    const configOutput = ts.transpileModule(configInput, {
-        compilerOptions: { target: ts.ScriptTarget.ESNext },
-    }).outputText;
-
-    fs.writeFileSync(
-        path.resolve(buildDirPath, "config.js"),
-        configOutput,
-        "utf8"
-    );
-}
-
 async function generateConfig() {
-    compileConfig();
+    esbuild.build({
+        entryPoints: [path.resolve(process.cwd(), "user/config.ts")],
+        bundle: false,
+        format: "esm",
+        outfile: path.resolve(buildDirPath, "config.js")
+    });
+
     const config: AftConfig = (
         await import(path.resolve(buildDirPath, "config.js"))
     ).default;

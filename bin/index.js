@@ -6,10 +6,10 @@ import path from 'node:path';
 import url from 'node:url';
 import fs$1 from 'node:fs';
 import { JSDOM } from 'jsdom';
-import ts from 'typescript';
 import fs from 'fs-extra';
 import dayjs from 'dayjs';
 import parseMD from 'parse-md';
+import esbuild from 'esbuild';
 import { getPathParams } from 'afterthoughts';
 import nodeFetch from 'node-fetch';
 
@@ -157,15 +157,13 @@ async function generate() {
     const config = await new Task("Generating config", generateConfig).start();
     await new Task("Generating posts", () => generatePosts(config)).start();
 }
-function compileConfig() {
-    const configInput = fs.readFileSync(path.resolve(process.cwd(), "user/config.ts"), "utf8");
-    const configOutput = ts.transpileModule(configInput, {
-        compilerOptions: { target: ts.ScriptTarget.ESNext },
-    }).outputText;
-    fs.writeFileSync(path.resolve(buildDirPath, "config.js"), configOutput, "utf8");
-}
 async function generateConfig() {
-    compileConfig();
+    esbuild.build({
+        entryPoints: [path.resolve(process.cwd(), "user/config.ts")],
+        bundle: false,
+        format: "esm",
+        outfile: path.resolve(buildDirPath, "config.js")
+    });
     const config = (await import(path.resolve(buildDirPath, "config.js"))).default;
     fs.writeFileSync(path.resolve(generateDirPath, "config.json"), JSON.stringify(config));
     return config;

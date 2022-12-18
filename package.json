@@ -24,11 +24,11 @@
         "@vitejs/plugin-react": "^2.2.0",
         "dayjs": "^1.11.7",
         "deepmerge": "^4.2.2",
+        "esbuild": "^0.16.8",
         "fs-extra": "^11.1.0",
         "jsdom": "^20.0.3",
         "node-fetch": "^3.3.0",
         "parse-md": "^3.0.3",
-        "typescript": "^4.9.3",
         "vite": "^3.2.5",
         "vite-tsconfig-paths": "^4.0.3"
     },
@@ -43,7 +43,8 @@
         "rollup": "^3.7.1",
         "rollup-plugin-node-externals": "^5.0.2",
         "rollup-plugin-preserve-shebang": "^1.0.1",
-        "tslib": "^2.4.1"
+        "tslib": "^2.4.1",
+        "typescript": "^4.9.3"
     },
     "peerDependencies": {
         "afterthoughts": "github:wirelesseye/afterthoughts"
