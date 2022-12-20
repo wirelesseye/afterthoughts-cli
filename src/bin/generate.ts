@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import path from "path";
 import dayjs from "dayjs";
-import { Task } from "./cli-utils";
+import { Task, trim } from "./cli-utils";
 import parseMD from "parse-md";
 import esbuild from "esbuild";
 
@@ -57,11 +57,12 @@ async function generatePosts(config: AftConfig) {
             "utf8"
         );
         const { metadata, content } = parseMD(postFile);
+        const synopsis = trim(content, config.posts.synopsisMaxLength);
 
         posts.push({
             filename: postFilename,
             metadata: metadata as Record<string, string>,
-            synopsis: content,
+            synopsis,
         });
     }
 

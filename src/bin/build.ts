@@ -152,6 +152,11 @@ async function buildSubpage(
     Page: React.ComponentType<any>,
     params: Record<string, string>
 ) {
+    // new document from template
+    const dom = new JSDOM(template);
+    const document = dom.window.document;
+    globalThis.document = document;
+
     // get output file path
     const outputFilePath = getOutputFilePath(pathname);
     if (!fs.existsSync(path.dirname(outputFilePath))) {
@@ -195,8 +200,6 @@ async function buildSubpage(
     const headContent = ReactDOMServer.renderToString(headTags as any);
 
     // inject rendering results into the template
-    const dom = new JSDOM(template);
-    const document = dom.window.document;
     const root = document.getElementById("root");
     if (!root) {
         throw Error("cannot find root element");

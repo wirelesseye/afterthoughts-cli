@@ -176,10 +176,11 @@ async function generatePosts(config) {
     for (const postFilename of postsDir) {
         const postFile = fs.readFileSync(path.join(postsPath, postFilename), "utf8");
         const { metadata, content } = parseMD(postFile);
+        const synopsis = trim(content, config.posts.synopsisMaxLength);
         posts.push({
             filename: postFilename,
             metadata: metadata,
-            synopsis: content,
+            synopsis,
         });
     }
     posts.sort((a, b) => dayjs(getMetaEntry(b, "date")).unix() -
@@ -427,6 +428,9 @@ async function buildPage(app, template, filepath, pages) {
     }
 }
 async function buildSubpage(app, template, pathname, Page, params) {
+    const dom = new JSDOM(template);
+    const document = dom.window.document;
+    globalThis.document = document;
     // get output file path
     const outputFilePath = getOutputFilePath(pathname);
     if (!fs$1.existsSync(path.dirname(outputFilePath))) {
@@ -460,8 +464,6 @@ async function buildSubpage(app, template, pathname, Page, params) {
     // render head
     const headContent = ReactDOMServer.renderToString(headTags);
     // inject rendering results into the template
-    const dom = new JSDOM(template);
-    const document = dom.window.document;
     const root = document.getElementById("root");
     if (!root) {
         throw Error("cannot find root element");
