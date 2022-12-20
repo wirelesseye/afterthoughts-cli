@@ -192,7 +192,7 @@ async function generatePosts(config) {
     fs.writeFileSync(path.resolve(dataDirPath, "posts.json"), JSON.stringify(postsData), "utf8");
     fs.mkdirSync(path.resolve(dataDirPath, "posts"));
     for (let i = 0; i < chunks.length; i++) {
-        fs.writeFileSync(path.resolve(dataDirPath, "posts", `${i}.json`), JSON.stringify(chunks[i]), "utf8");
+        fs.writeFileSync(path.resolve(dataDirPath, "posts", `${i + 1}.json`), JSON.stringify(chunks[i]), "utf8");
     }
 }
 function getMetaEntry(post, key, throwsErr) {

@@ -86,7 +86,7 @@ async function generatePosts(config: AftConfig) {
     fs.mkdirSync(path.resolve(dataDirPath, "posts"));
     for (let i = 0; i < chunks.length; i++) {
         fs.writeFileSync(
-            path.resolve(dataDirPath, "posts", `${i}.json`),
+            path.resolve(dataDirPath, "posts", `${i + 1}.json`),
             JSON.stringify(chunks[i]),
             "utf8"
         );
