@@ -162,7 +162,7 @@ async function generateConfig() {
         entryPoints: [path.resolve(process.cwd(), "user/config.ts")],
         bundle: false,
         format: "esm",
-        outfile: path.resolve(buildDirPath, "config.js")
+        outfile: path.resolve(buildDirPath, "config.js"),
     });
     const config = (await import(path.resolve(buildDirPath, "config.js"))).default;
     fs.writeFileSync(path.resolve(generateDirPath, "config.json"), JSON.stringify(config));
@@ -176,15 +176,16 @@ async function generatePosts(config) {
     for (const postFilename of postsDir) {
         const postFile = fs.readFileSync(path.join(postsPath, postFilename), "utf8");
         const { metadata, content } = parseMD(postFile);
+        const filename = path.parse(postFilename).name;
         const synopsis = trim(content, config.posts.synopsisMaxLength);
         posts.push({
-            filename: postFilename,
+            filename,
             metadata: metadata,
             synopsis,
         });
     }
-    posts.sort((a, b) => dayjs(getMetaEntry(b, "date")).unix() -
-        dayjs(getMetaEntry(a, "date")).unix());
+    posts.sort((a, b) => dayjs(getMetaEntry(b.filename, b.metadata, "date")).unix() -
+        dayjs(getMetaEntry(a.filename, a.metadata, "date")).unix());
     const numPerPage = config.posts.numPerPage;
     const chunks = splitArray(posts, numPerPage);
     const postsData = {
@@ -196,13 +197,13 @@ async function generatePosts(config) {
         fs.writeFileSync(path.resolve(dataDirPath, "posts", `${i + 1}.json`), JSON.stringify(chunks[i]), "utf8");
     }
 }
-function getMetaEntry(post, key, throwsErr) {
-    const result = post.metadata[key];
+function getMetaEntry(filename, metadata, key, throwsErr) {
+    const result = metadata[key];
     if (result !== undefined || !throwsErr) {
         return result;
     }
     else {
-        throw Error(`key ${key} does not exist in file ${post.filename}`);
+        throw Error(`metadata ${key} does not exist in file ${filename}`);
     }
 }
 function splitArray(arr, chunkSize) {
@@ -428,6 +429,7 @@ async function buildPage(app, template, filepath, pages) {
     }
 }
 async function buildSubpage(app, template, pathname, Page, params) {
+    // new document from template
     const dom = new JSDOM(template);
     const document = dom.window.document;
     globalThis.document = document;
@@ -440,10 +442,12 @@ async function buildSubpage(app, template, pathname, Page, params) {
     const headTags = [];
     app.resetPreloadDataMap();
     ReactDOMServer.renderToString(React.createElement(app, {
-        renderPathname: pathname,
-        renderPage: Page,
-        renderParams: params,
-        renderHeadTags: headTags,
+        prerenderProps: {
+            pathname: pathname,
+            page: Page,
+            params: params,
+            headTags: headTags,
+        }
     }));
     const preloadFetches = app.getPreloadDataMap();
     // fetch data
@@ -455,11 +459,13 @@ async function buildSubpage(app, template, pathname, Page, params) {
     }
     // second rendering
     const renderResult = ReactDOMServer.renderToString(React.createElement(app, {
-        renderPathname: pathname,
-        renderPage: Page,
-        renderParams: params,
-        renderHeadTags: headTags,
-        renderData: data,
+        prerenderProps: {
+            pathname: pathname,
+            page: Page,
+            params: params,
+            headTags: headTags,
+            staticData: data,
+        }
     }));
     // render head
     const headContent = ReactDOMServer.renderToString(headTags);

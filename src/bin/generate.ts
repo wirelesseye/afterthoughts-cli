@@ -31,7 +31,7 @@ async function generateConfig() {
         entryPoints: [path.resolve(process.cwd(), "user/config.ts")],
         bundle: false,
         format: "esm",
-        outfile: path.resolve(buildDirPath, "config.js")
+        outfile: path.resolve(buildDirPath, "config.js"),
     });
 
     const config: AftConfig = (
@@ -57,10 +57,11 @@ async function generatePosts(config: AftConfig) {
             "utf8"
         );
         const { metadata, content } = parseMD(postFile);
+        const filename = path.parse(postFilename).name;
         const synopsis = trim(content, config.posts.synopsisMaxLength);
 
         posts.push({
-            filename: postFilename,
+            filename,
             metadata: metadata as Record<string, string>,
             synopsis,
         });
@@ -68,8 +69,8 @@ async function generatePosts(config: AftConfig) {
 
     posts.sort(
         (a, b) =>
-            dayjs(getMetaEntry(b, "date")).unix() -
-            dayjs(getMetaEntry(a, "date")).unix()
+            dayjs(getMetaEntry(b.filename, b.metadata, "date")).unix() -
+            dayjs(getMetaEntry(a.filename, a.metadata, "date")).unix()
     );
 
     const numPerPage = config.posts.numPerPage;
@@ -94,12 +95,17 @@ async function generatePosts(config: AftConfig) {
     }
 }
 
-function getMetaEntry(post: PostInfo, key: string, throwsErr?: boolean) {
-    const result = post.metadata[key];
+function getMetaEntry(
+    filename: string,
+    metadata: any,
+    key: string,
+    throwsErr?: boolean
+) {
+    const result = metadata[key];
     if (result !== undefined || !throwsErr) {
         return result;
     } else {
-        throw Error(`key ${key} does not exist in file ${post.filename}`);
+        throw Error(`metadata ${key} does not exist in file ${filename}`);
     }
 }
 

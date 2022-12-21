@@ -169,10 +169,12 @@ async function buildSubpage(
     app.resetPreloadDataMap();
     ReactDOMServer.renderToString(
         React.createElement(app, {
-            renderPathname: pathname,
-            renderPage: Page,
-            renderParams: params,
-            renderHeadTags: headTags,
+            prerenderProps: {
+                pathname: pathname,
+                page: Page,
+                params: params,
+                headTags: headTags,
+            }
         })
     );
     const preloadFetches = app.getPreloadDataMap();
@@ -188,11 +190,13 @@ async function buildSubpage(
     // second rendering
     const renderResult = ReactDOMServer.renderToString(
         React.createElement(app, {
-            renderPathname: pathname,
-            renderPage: Page,
-            renderParams: params,
-            renderHeadTags: headTags,
-            renderData: data,
+            prerenderProps: {
+                pathname: pathname,
+                page: Page,
+                params: params,
+                headTags: headTags,
+                staticData: data,
+            }
         })
     );
 
